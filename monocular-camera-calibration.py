@@ -10,7 +10,10 @@
     Last updated: Saturday 23 March 2024
 
     EXAMPLE OF USAGE:
-    python monocular-camera-calibration.py --path_to_calibration_images sample-calibration-images/ --calibration_image_format JPG --chessboard_size 9 6 --output_calibration_parameters calibration-parameters/calibration_data_laptop.json
+    python3 monocular-camera-calibration.py --path_to_calibration_images sample-calibration-images/ \
+    --calibration_image_format JPG \
+    --chessboard_size 9 6 \
+    --output_calibration_parameters calibration-parameters/calibration_data_laptop.json
 """
 
 # Import standard libraries
