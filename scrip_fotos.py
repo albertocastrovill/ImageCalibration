@@ -15,7 +15,7 @@ if not cap.isOpened():
 
 i=10
 # Tomar 60 fotos, una cada 2 segundos
-for i in range(40):
+for i in range(8):
     # Capturar un frame
     ret, frame = cap.read()
 
@@ -27,7 +27,7 @@ for i in range(40):
     cv2.imshow('Camera', frame)
 
     # Esperar un poco antes de la próxima captura para que se pueda ver en pantalla
-    key = cv2.waitKey(2000)  # Espera 1000 ms
+    key = cv2.waitKey(1000)  # Espera 1000 ms
 
     # Guardar el frame como imagen
     filename = os.path.join(folder_name, f'foto_{i+1}.png')
