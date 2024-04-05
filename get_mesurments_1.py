@@ -1,4 +1,4 @@
-"""get_mesurments.py
+"""get_mesurments_1.py
 
     Author: Alberto Castro
     Organisation: Universidad de Monterrey
@@ -69,71 +69,15 @@ def load_calibration_parameters_from_json_file(
         f.close()
         
         camera_matrix = np.array(json_data['camera_matrix'])
+
         distortion_coefficients = np.array(json_data['distortion_coefficients'])
+
         return camera_matrix, distortion_coefficients
     
     # Otherwise, the program finishes
     else:
         print(f"The file {json_filename} does not exist!")
         sys.exit(-1)
-
-"""
-#Función de selección de puntos usando el mouse
-def mouse_callback(event, x, y, flags, param):
-    """
-"""
-    Callback function for mouse events.
-
-    Args:
-        event: Mouse event.
-        x: X-coordinate of the mouse pointer.
-        y: Y-coordinate of the mouse pointer.
-        flags: Flags for the mouse event.
-        param: Additional parameters for the mouse event.
-
-    Returns:
-        None: The function does not return any value.
-    """
-"""
-    # Get the global variables
-    global left_click_block
-    global wh
-    global points  
-    global coords  
-    global lines   
-
-    i = len(points)
-    
-    if event == cv2.EVENT_LBUTTONDOWN and not left_click_block:
-        print('Punto', i, 'seleccionado')
-        points.append([x, y])
-
-    elif event == cv2.EVENT_MBUTTONDOWN:
-        if not left_click_block:
-            if len(points) > 1:
-                print('Calculando distancia...')
-                left_click_block = True
-                wh = True
-                
-            else:
-                print('No se han seleccionado suficientes puntos')
-
-    elif event == cv2.EVENT_RBUTTONDOWN and left_click_block:
-        # finalizar la selección con botón derecho
-        print('Finalizando selección...')
-        left_click_block = False
-        wh = False
-        # añadir acciones a realizar tras finalizar la selección
-
-    elif flags == cv2.EVENT_FLAG_CTRLKEY:
-        # limpiar todo con una tecla especial, aquí CTRL
-        print('Reiniciando puntos...')
-        points.clear()
-        coords.clear()
-        lines.clear()
-        left_click_block = False
-        wh = False
-"""
 
 def calculate_distances_and_perimeter(points: List[Tuple[int, int]]) -> Tuple[List[float], float]:
     """
@@ -162,6 +106,60 @@ def calculate_distances_and_perimeter(points: List[Tuple[int, int]]) -> Tuple[Li
         perimeter = 0
     return distances, perimeter
 
+def compute_real_coordinates(points: List[Tuple[int, int]], Z, fx, fy, cx, cy) -> List[Tuple[float, float]]:
+    """
+    Compute the real-world coordinates of the points using the provided formulas.
+
+    Args:
+        points (List[Tuple[int, int]]): List of points where each point is represented as (x, y).
+        Z (float): Distance from the camera to the object plane.
+        fx (float): Focal length of the camera along the x axis.
+        fy (float): Focal length of the camera along the y axis.
+        cx (float): Horizontal pixel coordinate of the image center.
+        cy (float): Vertical pixel coordinate of the image center.
+
+    Returns:
+        List[Tuple[float, float]]: List of real-world coordinates.
+    """
+    real_coordinates = []
+    for (ui, vi) in points:
+        X = (ui - cx) * Z / fx
+        Y = (vi - cy) * Z / fy
+        real_coordinates.append((X, Y))
+    return real_coordinates
+
+def compute_line_segments(real_coordinates: List[Tuple[float, float]]) -> List[float]:
+    """
+    Calculate the length of each line segment between consecutive real-world points.
+
+    Args:
+        real_coordinates (List[Tuple[float, float]]): List of real-world coordinates where each point is represented as (X, Y).
+
+    Returns:
+        List[float]: Lengths of the line segments.
+    """
+    line_segments = [np.linalg.norm(np.array(real_coordinates[i]) - np.array(real_coordinates[i + 1]))
+                     for i in range(len(real_coordinates) - 1)]
+    
+    print(f'Distancias: {line_segments}')
+    return line_segments
+
+
+def compute_perimeter(line_segments: List[float]) -> float:
+    """
+    Compute the perimeter of the shape formed by the line segments.
+
+    Args:
+        line_segments (List[float]): Lengths of the line segments.
+
+    Returns:
+        float: Total perimeter of the shape.
+    """
+    perimetro = sum(line_segments)
+    print(f'Perímetro: {perimetro}')
+    return perimetro
+
+
 left_click_block = False 
 wh = False
 
@@ -174,20 +172,24 @@ def mouse_callback(event, x, y, flags, param):
         points.append((x, y))
 
     elif event == cv2.EVENT_MBUTTONDOWN and len(points) > 1:
+        # Cerrar la figura conectando el último punto con el primero
+        closed_points = points + [points[0]]
         print('Calculando distancia y cerrando figura...')
-        distances, perimeter = calculate_distances_and_perimeter(points)
+        line_segments = compute_line_segments(closed_points)
+        perimeter = compute_perimeter(line_segments)
         left_click_block = True
-        print(f'Distancias: {distances}')
+        print(f'Distancias: {line_segments}')
         print(f'Perímetro: {perimeter}')
-        # Re-drawing logic will be handled in the main loop
 
-    # Eliminar el último punto
+        # Ordenar las distancias de los segmentos de línea de mayor a menor
+        line_segments_desc = sorted(line_segments, reverse=True)
+        print(f'Distancias de segmentos de mayor a menor: {line_segments_desc}')
+
     elif event == cv2.EVENT_RBUTTONDOWN:
-        #Eliminar el último punto
         if len(points) > 0:
             print('Eliminando último punto...')
             points.pop()
-            left_click_block = False
+            left_click_block = False  # Permitir la selección de puntos de nuevo
         else:
             print('No hay puntos para eliminar.')
 
@@ -205,40 +207,57 @@ def initialize_camera(cam_index: int) -> cv2.VideoCapture:
     return cap
 
 # Run the pipeline
-def run_pipeline(cam_index: int, cal_file: str):
-    global points
+def run_pipeline(cam_index: int, cal_file: str, Z: float):
+    global points, frame
     camera_matrix, distortion_coefficients = load_calibration_parameters_from_json_file(cal_file)
+
+    # Extraer fx, fy, cx, cy de camera_matrix
+    fx, fy = camera_matrix[0, 0], camera_matrix[1, 1]
+    cx, cy = camera_matrix[0, 2], camera_matrix[1, 2]
+
     cap = initialize_camera(cam_index)
 
     cv2.namedWindow('Frame')
     cv2.setMouseCallback('Frame', mouse_callback)
 
     while True:
-        ret, frame = cap.read()
+        ret, raw_frame = cap.read()
         if not ret:
             print('Error al capturar imagen de la cámara.')
             break
 
-        # Dibuja los puntos y líneas en el frame
-        for i, point in enumerate(points):
-            cv2.circle(frame, point, 5, (0, 255, 0), -1)
+        # Aplicar la corrección de distorsión a la imagen capturada
+        frame = cv2.undistort(raw_frame, camera_matrix, distortion_coefficients)
+
+        # Dibuja los puntos y líneas en el frame corregido
+        for i, (x, y) in enumerate(points):
+            # Convierte las coordenadas de píxeles para el dibujo
+            pixel_coords = (int(x), int(y))
+            cv2.circle(frame, pixel_coords, 5, (0, 255, 0), -1)
             if i > 0:
-                cv2.line(frame, points[i - 1], points[i], (255, 0, 0), 2)
+                cv2.line(frame, points[i - 1], pixel_coords, (255, 0, 0), 2)
+
         if left_click_block and len(points) > 1:
+            # Asegúrate de cerrar la figura
             cv2.line(frame, points[-1], points[0], (255, 0, 0), 2)  # Cierra la figura
+            closed_points = points + [points[0]]
+            real_coords = compute_real_coordinates(closed_points, Z, fx, fy, cx, cy)
+            line_segments = compute_line_segments(real_coords)
+            perimeter = compute_perimeter(line_segments)
 
         cv2.imshow('Frame', frame)
 
-        if cv2.waitKey(1) & 0xFF == ord('q'):  # Press 'q' to exit
+        if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
     cap.release()
     cv2.destroyAllWindows()
 
+
 # Main function
 def main():
     args = parse_data_from_cli_get_measurements()
-    run_pipeline(args.cam_index, args.cal_file)
+    run_pipeline(args.cam_index, args.cal_file, args.Z)
 
 if __name__ == "__main__":
     main()
