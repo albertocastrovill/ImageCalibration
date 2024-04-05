@@ -5,7 +5,7 @@
     Contact: josealberto.castro@udem.edu
 
     EXAMPLE OF USAGE:
-    python3 get-measurements.py --cam_index 0 --Z 56 --cal_file calibration_data_laptop.json
+    python3 get_mesurments.py --cam_index 0 --Z 40 --cal_file calibration-parameters/calibration_data_laptop.json
 """
 
 # Import standard libraries
@@ -15,6 +15,10 @@ import argparse
 import json
 import os
 from typing import List, Tuple
+import sys
+
+points = []
+frame = None
 
 def parse_data_from_cli_get_measurements()->argparse.ArgumentParser:
     """
@@ -37,27 +41,41 @@ def parse_data_from_cli_get_measurements()->argparse.ArgumentParser:
     
     return args
 
-def load_calibration_parameters_from_json_file(args:argparse.ArgumentParser)->Tuple[np.ndarray, np.ndarray]:
+def load_calibration_parameters_from_json_file(
+        cal_file: str
+        )->None:
     """
-    Load the camera calibration parameters from a JSON file.
+    Load camera calibration parameters from a JSON file.
 
     Args:
         args: Parsed command-line arguments.
 
     Returns:
-        camera_matrix: Intrinsic camera matrix.
+        camera_matrix: Camera matrix.
         distortion_coefficients: Distortion coefficients.
+
+    This function may raise a warning if the JSON file 
+    does not exist. In such a case, the program finishes.
     """
+
+    # Check if JSON file exists
+    json_filename = cal_file
+    check_file = os.path.isfile(json_filename)
+
+    # If JSON file exists, load the calibration parameters
+    if check_file:
+        f = open(json_filename)
+        json_data = json.load(f)
+        f.close()
+        
+        camera_matrix = np.array(json_data['camera_matrix'])
+        distortion_coefficients = np.array(json_data['distortion_coefficients'])
+        return camera_matrix, distortion_coefficients
     
-    # Load the camera calibration parameters from a JSON file
-    with open(args.cal_file) as file:
-        calibration_data = json.load(file)
-    
-    # Extract the camera matrix and distortion coefficients
-    camera_matrix = np.array(calibration_data['camera_matrix'])
-    distortion_coefficients = np.array(calibration_data['distortion_coefficients'])
-    
-    return camera_matrix, distortion_coefficients
+    # Otherwise, the program finishes
+    else:
+        print(f"The file {json_filename} does not exist!")
+        sys.exit(-1)
 
 """
 #Función de selección de puntos usando el mouse
@@ -144,36 +162,39 @@ def calculate_distances_and_perimeter(points: List[Tuple[int, int]]) -> Tuple[Li
         perimeter = 0
     return distances, perimeter
 
+left_click_block = False 
+wh = False
+
 # Update the mouse_callback function
 def mouse_callback(event, x, y, flags, param):
-    global left_click_block
-    global wh
-    global points  
-    global coords  
-    global lines   
+    global left_click_block, points
 
-    i = len(points)
-    
     if event == cv2.EVENT_LBUTTONDOWN and not left_click_block:
-        print(f'Punto {i} seleccionado')
+        print(f'Punto {len(points)} seleccionado: ({x}, {y})')
         points.append((x, y))
 
-    elif event == cv2.EVENT_MBUTTONDOWN:
-        if not left_click_block and len(points) > 1:
-            print('Calculando distancia...')
-            distances, perimeter = calculate_distances_and_perimeter(points)
-            left_click_block = True
-            wh = True
-            print(f'Distancias: {distances}')
-            print(f'Perímetro: {perimeter}')
+    elif event == cv2.EVENT_MBUTTONDOWN and len(points) > 1:
+        print('Calculando distancia y cerrando figura...')
+        distances, perimeter = calculate_distances_and_perimeter(points)
+        left_click_block = True
+        print(f'Distancias: {distances}')
+        print(f'Perímetro: {perimeter}')
+        # Re-drawing logic will be handled in the main loop
+
+    # Eliminar el último punto
+    elif event == cv2.EVENT_RBUTTONDOWN:
+        #Eliminar el último punto
+        if len(points) > 0:
+            print('Eliminando último punto...')
+            points.pop()
+            left_click_block = False
         else:
-            print('No se han seleccionado suficientes puntos para calcular')
+            print('No hay puntos para eliminar.')
 
     elif flags == cv2.EVENT_FLAG_CTRLKEY:
         print('Reiniciando puntos...')
         points.clear()
         left_click_block = False
-        wh = False
 
     
 # Initialize camera
@@ -185,9 +206,10 @@ def initialize_camera(cam_index: int) -> cv2.VideoCapture:
 
 # Run the pipeline
 def run_pipeline(cam_index: int, cal_file: str):
+    global points
     camera_matrix, distortion_coefficients = load_calibration_parameters_from_json_file(cal_file)
     cap = initialize_camera(cam_index)
-    
+
     cv2.namedWindow('Frame')
     cv2.setMouseCallback('Frame', mouse_callback)
 
@@ -197,10 +219,16 @@ def run_pipeline(cam_index: int, cal_file: str):
             print('Error al capturar imagen de la cámara.')
             break
 
-        # Here you can undistort the image if necessary
-        # frame = cv2.undistort(frame, camera_matrix, distortion_coefficients)
+        # Dibuja los puntos y líneas en el frame
+        for i, point in enumerate(points):
+            cv2.circle(frame, point, 5, (0, 255, 0), -1)
+            if i > 0:
+                cv2.line(frame, points[i - 1], points[i], (255, 0, 0), 2)
+        if left_click_block and len(points) > 1:
+            cv2.line(frame, points[-1], points[0], (255, 0, 0), 2)  # Cierra la figura
 
         cv2.imshow('Frame', frame)
+
         if cv2.waitKey(1) & 0xFF == ord('q'):  # Press 'q' to exit
             break
 
