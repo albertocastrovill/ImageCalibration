@@ -9,10 +9,10 @@
     Last updated: Saturday 23 March 2024
 
     EXAMPLE OF USAGE:
-    python3 correct-image-distortion.py --input_calibration_parameters calibration-parameters/calibration_data.json \
-    --path_to_distorted_images distorted-images-car/ \
-    --format_of_distorted_images JPG \
-    --path_to_undistorted_images undistorted-images-car/
+    python3 correct-image-distortion.py --input_calibration_parameters calibration-parameters/calibration_data_laptop.json \
+    --path_to_distorted_images distorded_images/ \
+    --format_of_distorted_images PNG \
+    --path_to_undistorted_images undistorted_images/
     
     TODO:
         + Print information using a flag called 'verbose'.

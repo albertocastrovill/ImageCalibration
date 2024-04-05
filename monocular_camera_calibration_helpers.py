@@ -75,7 +75,7 @@ def parse_data_from_cli_correct_image_distortion()->argparse.ArgumentParser:
     parser.add_argument('--format_of_distorted_images',
                         type=str,
                         required=True,
-                        choices=['PNG', 'JPG', 'JPEG', 'BMP'],
+                        choices=['png','PNG', 'JPG', 'JPEG', 'BMP'],
                         help='Format of distorted images [PNG, JPG, JPEG, BMP]')
     parser.add_argument('--path_to_undistorted_images',
                         type=str,
