@@ -1,11 +1,13 @@
 """get_mesurments.py
 
+    This script 
+
     Author: Alberto Castro
     Organisation: Universidad de Monterrey
     Contact: josealberto.castro@udem.edu
 
     EXAMPLE OF USAGE:
-    python3 get_mesurments.py --cam_index 0 --Z 40 --cal_file calibration-parameters/calibration_data_laptop.json
+    python3 get_mesurements.py --cam_index 0 --Z 40 --cal_file calibration-parameters/calibration_data_laptop.json
 """
 
 import cv2
@@ -181,6 +183,19 @@ def initialize_camera(cam_index: int) -> cv2.VideoCapture:
         raise IOError(f'Cannot open camera with index {cam_index}')
     return cap
 
+def undistort_image(frame, camera_matrix, distortion_coefficients):
+    """
+    This function undistorts an image.
+
+    Args:
+        frame: Image to undistort.
+
+    Returns:
+        undistorted_frame: Undistorted image.
+    """
+    undistorted_frame = cv2.undistort(frame, camera_matrix, distortion_coefficients)
+    return undistorted_frame
+
 def run_pipeline(cam_index: int, cal_file: str, Z: float):
     """
     This function runs the pipeline to get measurements from a camera image.
@@ -206,7 +221,7 @@ def run_pipeline(cam_index: int, cal_file: str, Z: float):
             print('Error capturing image from camera.')
             break
 
-        frame = cv2.undistort(raw_frame, camera_matrix, distortion_coefficients)
+        frame = undistort_image(raw_frame, camera_matrix, distortion_coefficients)
         for i, point in enumerate(pixel_points):
             cv2.circle(frame, point, 5, (0, 255, 0), -1)
             if i > 0:
